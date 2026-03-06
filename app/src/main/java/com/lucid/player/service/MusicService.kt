@@ -10,27 +10,16 @@ import javax.inject.Inject
 
 @AndroidEntryPoint
 class MusicService : MediaSessionService() {
-
-    @Inject
-    lateinit var player: ExoPlayer
-
-    private var mediaSession: MediaSession? = null
+    @Inject lateinit var player: ExoPlayer
+    private var session: MediaSession? = null
 
     override fun onCreate() {
         super.onCreate()
-        mediaSession = MediaSession.Builder(this, player).build()
+        session = MediaSession.Builder(this, player).build()
     }
-
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
-        return mediaSession
-    }
-
+    override fun onGetSession(info: MediaSession.ControllerInfo) = session
     override fun onDestroy() {
-        mediaSession?.run {
-            player.release()
-            release()
-            mediaSession = null
-        }
+        session?.run { player.release(); release(); session = null }
         super.onDestroy()
     }
 }

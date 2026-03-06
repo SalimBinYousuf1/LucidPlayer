@@ -8,7 +8,7 @@ data class Song(
     val artist: String,
     val album: String,
     val albumId: Long,
-    val duration: Long, // milliseconds
+    val duration: Long,          // ms
     val uri: Uri,
     val artworkUri: Uri?,
     val trackNumber: Int = 0,
@@ -17,13 +17,10 @@ data class Song(
     val size: Long = 0L,
     val isFavorite: Boolean = false
 ) {
-    val durationFormatted: String
-        get() {
-            val totalSeconds = duration / 1000
-            val minutes = totalSeconds / 60
-            val seconds = totalSeconds % 60
-            return "%d:%02d".format(minutes, seconds)
-        }
+    val durationFormatted: String get() {
+        val s = duration / 1000
+        return "%d:%02d".format(s / 60, s % 60)
+    }
 }
 
 data class Album(
@@ -46,26 +43,28 @@ data class Playlist(
     val id: Long,
     val name: String,
     val songs: List<Song> = emptyList(),
-    val createdAt: Long = System.currentTimeMillis(),
-    val artworkUri: Uri? = null
+    val createdAt: Long = System.currentTimeMillis()
 ) {
-    val songCount: Int get() = songs.size
+    val songCount: Int  get() = songs.size
     val totalDuration: Long get() = songs.sumOf { it.duration }
 }
 
-enum class RepeatMode {
-    OFF, ONE, ALL
-}
+enum class RepeatMode { OFF, ALL, ONE }
+
+enum class PlayerTab { HOME, LIBRARY, ARTISTS, SEARCH }
 
 data class PlayerState(
     val currentSong: Song? = null,
     val isPlaying: Boolean = false,
     val progress: Float = 0f,
     val currentPosition: Long = 0L,
+    val duration: Long = 0L,
     val repeatMode: RepeatMode = RepeatMode.OFF,
     val isShuffled: Boolean = false,
     val queue: List<Song> = emptyList(),
     val currentIndex: Int = -1,
-    val dominantColor: Int = 0xFF1A1A2E.toInt(),
-    val accentColor: Int = 0xFF6C63FF.toInt()
+    val sleepTimerMinutes: Int = 0,
+    val equalizerBands: List<Float> = listOf(0f, 0f, 0f, 0f, 0f),
+    val volume: Float = 1f,
+    val playbackSpeed: Float = 1f
 )

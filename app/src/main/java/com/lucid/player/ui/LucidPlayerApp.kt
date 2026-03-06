@@ -1,100 +1,85 @@
 package com.lucid.player.ui
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Album
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.*
 import com.lucid.player.ui.components.MiniPlayer
 import com.lucid.player.ui.screens.*
-import com.lucid.player.ui.theme.NeonPurple
-import com.lucid.player.ui.theme.Surface1
-import com.lucid.player.ui.theme.TextSecondary
-import com.lucid.player.ui.theme.Void
+import com.lucid.player.ui.theme.LucidColors
 import com.lucid.player.viewmodel.PlayerViewModel
 
-sealed class Screen(val route: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, val label: String) {
-    object Home : Screen("home", Icons.Default.Home, "Home")
-    object Library : Screen("library", Icons.Default.Album, "Library")
-    object Artists : Screen("artists", Icons.Default.Person, "Artists")
-    object Search : Screen("search", Icons.Default.Search, "Search")
-    object NowPlaying : Screen("now_playing", Icons.Default.Home, "Now Playing")
+sealed class Dest(val route: String, val icon: ImageVector, val label: String) {
+    object Home    : Dest("home",    Icons.Rounded.Home,        "Home")
+    object Library : Dest("library", Icons.Rounded.LibraryMusic,"Library")
+    object Artists : Dest("artists", Icons.Rounded.Person,      "Artists")
+    object Search  : Dest("search",  Icons.Rounded.Search,      "Search")
+    object NowPlay : Dest("player",  Icons.Rounded.Home,        "Player")
 }
 
 @Composable
 fun LucidPlayerApp() {
-    val navController = rememberNavController()
-    val viewModel: PlayerViewModel = hiltViewModel()
-    val playerState by viewModel.playerState.collectAsState()
-
-    val bottomNavItems = listOf(Screen.Home, Screen.Library, Screen.Artists, Screen.Search)
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentDestination = navBackStackEntry?.destination
-    val showBottomBar = currentDestination?.route != Screen.NowPlaying.route
+    val nav  = rememberNavController()
+    val vm: PlayerViewModel = hiltViewModel()
+    val state by vm.state.collectAsState()
+    val current by nav.currentBackStackEntryAsState()
+    val route = current?.destination?.route
+    val showBar = route != Dest.NowPlay.route
+    val tabs = listOf(Dest.Home, Dest.Library, Dest.Artists, Dest.Search)
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        containerColor = Void,
+        containerColor = LucidColors.Void,
         bottomBar = {
-            if (showBottomBar) {
+            if (showBar) {
                 Column {
-                    // Mini Player above bottom nav
-                    if (playerState.currentSong != null) {
+                    AnimatedVisibility(
+                        visible = state.currentSong != null,
+                        enter = slideInVertically { it } + fadeIn(),
+                        exit  = slideOutVertically { it } + fadeOut()
+                    ) {
                         MiniPlayer(
-                            playerState = playerState,
-                            onTogglePlay = viewModel::togglePlayPause,
-                            onSkipNext = viewModel::skipNext,
-                            onClick = { navController.navigate(Screen.NowPlaying.route) }
+                            state = state,
+                            onTogglePlay = vm::togglePlayPause,
+                            onSkipNext   = vm::skipNext,
+                            onSkipPrev   = vm::skipPrev,
+                            onClick      = { nav.navigate(Dest.NowPlay.route) }
                         )
                     }
                     NavigationBar(
-                        containerColor = Surface1,
-                        tonalElevation = 0.dp
+                        containerColor = LucidColors.Surface,
+                        tonalElevation = 0.dp,
+                        modifier = Modifier.height(62.dp)
                     ) {
-                        bottomNavItems.forEach { screen ->
-                            val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                        tabs.forEach { dest ->
+                            val sel = current?.destination?.hierarchy?.any { it.route == dest.route } == true
                             NavigationBarItem(
-                                selected = selected,
+                                selected = sel,
                                 onClick = {
-                                    navController.navigate(screen.route) {
-                                        popUpTo(navController.graph.findStartDestination().id) {
-                                            saveState = true
-                                        }
+                                    nav.navigate(dest.route) {
+                                        popUpTo(nav.graph.findStartDestination().id) { saveState = true }
                                         launchSingleTop = true
                                         restoreState = true
                                     }
                                 },
-                                icon = {
-                                    Icon(
-                                        imageVector = screen.icon,
-                                        contentDescription = screen.label
-                                    )
-                                },
-                                label = {
-                                    Text(
-                                        text = screen.label,
-                                        style = MaterialTheme.typography.labelSmall
-                                    )
-                                },
+                                icon = { Icon(dest.icon, dest.label, modifier = Modifier.size(22.dp)) },
+                                label = { Text(dest.label) },
                                 colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = NeonPurple,
-                                    selectedTextColor = NeonPurple,
-                                    unselectedIconColor = TextSecondary,
-                                    unselectedTextColor = TextSecondary,
-                                    indicatorColor = NeonPurple.copy(alpha = 0.15f)
+                                    selectedIconColor   = LucidColors.Indigo,
+                                    selectedTextColor   = LucidColors.Indigo,
+                                    unselectedIconColor = LucidColors.Text30,
+                                    unselectedTextColor = LucidColors.Text30,
+                                    indicatorColor      = LucidColors.Indigo.copy(alpha = 0.15f)
                                 )
                             )
                         }
@@ -102,60 +87,38 @@ fun LucidPlayerApp() {
                 }
             }
         }
-    ) { paddingValues ->
+    ) { pv ->
         NavHost(
-            navController = navController,
-            startDestination = Screen.Home.route,
-            modifier = Modifier.padding(paddingValues)
+            navController = nav,
+            startDestination = Dest.Home.route,
+            modifier = Modifier.padding(pv),
+            enterTransition  = { fadeIn(tween(220)) + slideInHorizontally { 60 } },
+            exitTransition   = { fadeOut(tween(180)) },
+            popEnterTransition  = { fadeIn(tween(220)) + slideInHorizontally { -60 } },
+            popExitTransition   = { fadeOut(tween(180)) }
         ) {
-            composable(Screen.Home.route) {
-                HomeScreen(
-                    viewModel = viewModel,
-                    onSongClick = { song ->
-                        viewModel.playSong(song)
-                        navController.navigate(Screen.NowPlaying.route)
-                    },
-                    onNavigateToNowPlaying = { navController.navigate(Screen.NowPlaying.route) }
-                )
+            composable(Dest.Home.route) {
+                HomeScreen(vm, onSongClick = { s -> vm.playSong(s); nav.navigate(Dest.NowPlay.route) },
+                    onNowPlaying = { nav.navigate(Dest.NowPlay.route) })
             }
-            composable(Screen.Library.route) {
-                LibraryScreen(
-                    viewModel = viewModel,
-                    onSongClick = { song ->
-                        viewModel.playSong(song)
-                        navController.navigate(Screen.NowPlaying.route)
-                    }
-                )
+            composable(Dest.Library.route) {
+                LibraryScreen(vm, onSongClick = { s -> vm.playSong(s); nav.navigate(Dest.NowPlay.route) })
             }
-            composable(Screen.Artists.route) {
-                ArtistsScreen(
-                    viewModel = viewModel,
-                    onSongClick = { song ->
-                        viewModel.playSong(song)
-                        navController.navigate(Screen.NowPlaying.route)
-                    }
-                )
+            composable(Dest.Artists.route) {
+                ArtistsScreen(vm, onSongClick = { s -> vm.playSong(s); nav.navigate(Dest.NowPlay.route) })
             }
-            composable(Screen.Search.route) {
-                SearchScreen(
-                    viewModel = viewModel,
-                    onSongClick = { song ->
-                        viewModel.playSong(song)
-                        navController.navigate(Screen.NowPlaying.route)
-                    }
-                )
+            composable(Dest.Search.route) {
+                SearchScreen(vm, onSongClick = { s -> vm.playSong(s); nav.navigate(Dest.NowPlay.route) })
             }
-            composable(Screen.NowPlaying.route) {
-                NowPlayingScreen(
-                    viewModel = viewModel,
-                    onNavigateBack = { navController.popBackStack() }
-                )
+            composable(
+                Dest.NowPlay.route,
+                enterTransition = { slideInVertically { it } + fadeIn(tween(300)) },
+                exitTransition  = { slideOutVertically { it } + fadeOut(tween(250)) },
+                popEnterTransition = { slideInVertically { it } + fadeIn(tween(300)) },
+                popExitTransition  = { slideOutVertically { it } + fadeOut(tween(250)) },
+            ) {
+                NowPlayingScreen(vm, onBack = { nav.popBackStack() })
             }
         }
     }
-}
-
-@Composable
-fun Column(content: @Composable () -> Unit) {
-    androidx.compose.foundation.layout.Column { content() }
 }

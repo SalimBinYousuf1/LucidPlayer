@@ -1,7 +1,7 @@
 package com.lucid.player.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.animation.*
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,122 +14,96 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import com.lucid.player.data.models.PlayerState
-import com.lucid.player.ui.theme.*
+import com.lucid.player.ui.theme.LucidColors
 
 @Composable
 fun MiniPlayer(
-    playerState: PlayerState,
+    state: PlayerState,
     onTogglePlay: () -> Unit,
     onSkipNext: () -> Unit,
-    onClick: () -> Unit
+    onSkipPrev: () -> Unit,
+    onClick: () -> Unit,
 ) {
-    val song = playerState.currentSong ?: return
-
+    val song = state.currentSong ?: return
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(Surface2)
-            .background(GlassWhite)
+            .padding(horizontal = 10.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                Brush.horizontalGradient(
+                    colors = listOf(LucidColors.Card, LucidColors.SurfaceHigh)
+                )
+            )
+            .border(0.5.dp, LucidColors.GlassBorder, RoundedCornerShape(20.dp))
             .clickable(onClick = onClick)
     ) {
-        // Progress indicator at top
+        // Progress line at very top
         Box(
             modifier = Modifier
-                .fillMaxWidth(playerState.progress)
+                .fillMaxWidth(state.progress)
                 .height(2.dp)
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(NeonPurple, Aurora)
-                    )
-                )
                 .align(Alignment.TopStart)
+                .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+                .background(
+                    Brush.horizontalGradient(colors = listOf(LucidColors.Indigo, LucidColors.Aurora))
+                )
         )
-
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // Artwork
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Surface1)
-            ) {
-                if (song.artworkUri != null) {
-                    AsyncImage(
-                        model = song.artworkUri,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier.fillMaxSize()
-                            .background(Brush.radialGradient(colors = listOf(NeonPurple, CelestialBlue))),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Rounded.MusicNote, null, tint = Color.White, modifier = Modifier.size(20.dp))
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
+            ArtworkImage(
+                uri = song.artworkUri,
+                modifier = Modifier.size(46.dp),
+                cornerRadius = 10.dp
+            )
+            // Song info
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     song.title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextPrimary,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = LucidColors.Text100,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     song.artist,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = LucidColors.Text50,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-
-            // Play/Pause
-            IconButton(
-                onClick = onTogglePlay,
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(NeonPurple.copy(alpha = 0.2f))
-            ) {
-                Icon(
-                    if (playerState.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                    contentDescription = null,
-                    tint = NeonPurple,
-                    modifier = Modifier.size(22.dp)
+            // Controls
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                GlowIconButton(
+                    icon = Icons.Rounded.SkipPrevious,
+                    contentDescription = "Previous",
+                    onClick = onSkipPrev,
+                    size = 36.dp, iconSize = 18.dp,
+                    tint = LucidColors.Text80
                 )
-            }
-
-            Spacer(modifier = Modifier.width(4.dp))
-
-            // Skip next
-            IconButton(
-                onClick = onSkipNext,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Icon(
-                    Icons.Rounded.SkipNext,
+                GlowIconButton(
+                    icon = if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                    contentDescription = "Play/Pause",
+                    onClick = onTogglePlay,
+                    size = 40.dp, iconSize = 22.dp,
+                    active = true, activeColor = LucidColors.Indigo
+                )
+                GlowIconButton(
+                    icon = Icons.Rounded.SkipNext,
                     contentDescription = "Next",
-                    tint = TextSecondary,
-                    modifier = Modifier.size(20.dp)
+                    onClick = onSkipNext,
+                    size = 36.dp, iconSize = 18.dp,
+                    tint = LucidColors.Text80
                 )
             }
         }

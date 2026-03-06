@@ -2,161 +2,122 @@
 
 <div align="center">
 
-![Lucid Player Banner](https://via.placeholder.com/800x200/000000/9D4EDD?text=🎵+LUCID+PLAYER)
+**AMOLED Dark • Glassmorphism • Auto-builds on every push**
 
-**A world-class Android music player with AMOLED glassmorphism UI**
-
-[![Build APK](https://github.com/YOUR_USERNAME/LucidPlayer/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/LucidPlayer/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
-[![API](https://img.shields.io/badge/API-26%2B-brightgreen.svg)](https://android-arsenal.com/api?level=26)
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.0-blue.svg)](https://kotlinlang.org)
+[![CI/CD](https://github.com/YOUR_USERNAME/LucidPlayer/actions/workflows/build.yml/badge.svg)](https://github.com/YOUR_USERNAME/LucidPlayer/actions)
+[![API 26+](https://img.shields.io/badge/API-26%2B-brightgreen)](https://android-arsenal.com/api?level=26)
+[![Kotlin 2.0](https://img.shields.io/badge/Kotlin-2.0-blue)](https://kotlinlang.org)
 
 </div>
 
 ---
 
-## ✨ Features
+## ⚡ Auto-Build: Push → APK in 4 minutes
 
-| Feature | Description |
-|---------|-------------|
-| 🎨 **AMOLED UI** | Pure black backgrounds with neon purple/blue glassmorphism |
-| 🎵 **Full Playback** | Play, pause, skip, seek with Media3 ExoPlayer |
-| 🔀 **Shuffle & Repeat** | Off / All / One repeat modes |
-| ❤️ **Favorites** | Mark and filter your favorite tracks |
-| 🔍 **Search** | Real-time search across songs, artists, albums |
-| 📀 **Album Grid** | Beautiful 2-column album art grid |
-| 🎤 **Artists** | Browse by artist with song/album counts |
-| 📱 **Notification** | Media notification with playback controls |
-| 💿 **Vinyl Animation** | Spinning vinyl record on now-playing screen |
+> **Zero setup required.** Every push to `main` automatically:
+> 1. Builds a signed APK (auto-generates keystore, no secrets needed)
+> 2. Creates a GitHub Release with the APK attached
+> 3. Available for download immediately
+
+```
+git push origin main
+           ↓  (4 minutes)
+GitHub Release → LucidPlayer-release.apk  ✅
+```
 
 ---
 
-## 📸 Screenshots
+## 🚀 Quick Start
 
-> The Now Playing screen features an animated vinyl record with glowing border effects, gradient progress bar, and glassmorphism action buttons.
+```bash
+# 1. Clone
+git clone https://github.com/YOUR_USERNAME/LucidPlayer.git
+cd LucidPlayer
+
+# 2. Push to YOUR GitHub (creates auto-release)
+git remote set-url origin https://github.com/YOUR_USERNAME/LucidPlayer.git
+git push -u origin main
+
+# 3. Watch it build → Actions tab → Download APK from Releases
+```
+
+That's it. **No secrets, no keystore setup, no tags needed.**
+
+---
+
+## 📲 Install APK
+
+1. Go to your repo **Releases** tab
+2. Download `app-release.apk`  
+3. On Android: **Settings → Security → Install Unknown Apps → ON**
+4. Open APK → Install
+
+---
+
+## ✨ Features
+
+| Feature | Detail |
+|---------|--------|
+| 🎵 **Full Playback** | Media3 ExoPlayer, gapless, background |
+| 🎨 **AMOLED UI** | Pure black + electric indigo glassmorphism |
+| 💿 **Spinning Vinyl** | Animated record on Now Playing |
+| ⏱️ **Sleep Timer** | 5 / 10 / 15 / 30 / 45 / 60 min |
+| ⚡ **Speed Control** | 0.5× – 2.0× playback |
+| 📋 **Queue** | Full playback queue view |
+| ❤️ **Favourites** | One-tap save, dedicated section |
+| 🔀 **Shuffle + Repeat** | Off / All / One |
+| 🔍 **Live Search** | Real-time across songs, artists, albums |
+| 🎤 **Artists** | Colour-coded gradient avatars |
+| 💿 **Albums Grid** | 2-col artwork grid |
+| 📱 **Notification** | Full media controls in notification bar |
+| ▶️ **Mini Player** | Persistent bar with previous/play/next |
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-LucidPlayer/
+app/
+├── di/             Hilt modules (ExoPlayer singleton)
 ├── data/
-│   ├── models/          # Song, Album, Artist, PlayerState
-│   └── repository/      # MusicRepository (MediaStore queries)
-├── service/
-│   └── MusicService     # Media3 MediaSessionService
-├── viewmodel/
-│   └── PlayerViewModel  # Hilt ViewModel, controller bridge
+│   ├── models/     Song, Album, Artist, PlayerState
+│   └── repository/ MusicRepository (MediaStore)
+├── service/        MusicService (Media3 foreground)
+├── viewmodel/      PlayerViewModel (sleep timer, speed, queue)
 └── ui/
-    ├── theme/           # AMOLED colors, typography
-    ├── screens/         # Home, Library, Artists, Search, NowPlaying
-    └── components/      # MiniPlayer, reusable composables
+    ├── theme/      AMOLED colors, typography
+    ├── components/ GlassCard, SongRow, MiniPlayer, PlayingBars
+    └── screens/    Home, Library, Artists, Search, NowPlaying
 ```
 
-**Stack:** Kotlin • Jetpack Compose • Media3 ExoPlayer • Hilt • Navigation Compose • Coil • Room
+**Stack:** Kotlin 2.0 · Jetpack Compose · Media3 · Hilt · Navigation · Coil · Room
 
 ---
 
-## 🚀 Getting Started
+## 🔐 Signing (Optional: Use Your Own Keystore)
 
-### Prerequisites
-- Android Studio Hedgehog (2023.1.1) or newer
-- JDK 17
-- Android SDK 35
+By default, CI auto-generates a new keystore each build. For consistent signing:
 
-### Build & Run
+1. **GitHub → Settings → Secrets → Actions** → Add:
+   - `KEYSTORE_BASE64` — `base64 -i your.keystore | pbcopy`
+   - `KEY_ALIAS`
+   - `KEY_PASSWORD`
+   - `STORE_PASSWORD`
+
+2. Push → CI uses your keystore automatically.
+
+---
+
+## 🧪 Local Build
 
 ```bash
-# Clone the repo
-git clone https://github.com/YOUR_USERNAME/LucidPlayer.git
-cd LucidPlayer
-
-# Build debug APK
-./gradlew assembleDebug
-
-# Install on connected device
-./gradlew installDebug
+./gradlew assembleDebug          # Debug APK
+./gradlew assembleRelease        # Release APK (uses debug keystore locally)
+./gradlew installDebug           # Install on connected device
 ```
 
-### Push to Your GitHub
-
-```bash
-# Initialize git (already done if cloned)
-git init
-git add .
-git commit -m "feat: initial Lucid Player implementation"
-
-# Create repo on GitHub, then:
-git remote add origin https://github.com/YOUR_USERNAME/LucidPlayer.git
-git branch -M main
-git push -u origin main
-```
+Requires: JDK 17 · Android SDK 35 · Android Studio Hedgehog+
 
 ---
 
-## 📦 GitHub Actions CI/CD
-
-The workflow (`.github/workflows/ci.yml`) automatically:
-
-| Trigger | Action |
-|---------|--------|
-| Push to `main`/`develop` | Lint + Tests + Debug APK |
-| Pull Request | Lint + Tests |
-| Tag `v*` (e.g. `v1.0.0`) | Full signed Release APK + GitHub Release |
-
-### Setting Up Releases
-
-1. Go to your GitHub repo → **Settings** → **Secrets and variables** → **Actions**
-2. Add these secrets for signed releases:
-   - `KEYSTORE_BASE64` — Base64 encoded keystore file
-   - `KEY_ALIAS` — Your key alias
-   - `KEY_PASSWORD` — Key password
-   - `STORE_PASSWORD` — Keystore password
-
-3. Create a release:
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-The workflow will automatically build, sign, and publish the APK as a GitHub Release! 🎉
-
----
-
-## 🎨 Design System
-
-| Token | Value | Use |
-|-------|-------|-----|
-| `Void` | `#000000` | AMOLED background |
-| `NeonPurple` | `#9D4EDD` | Primary accent |
-| `CelestialBlue` | `#3D5AF1` | Secondary accent |
-| `Aurora` | `#00D4FF` | Highlight / progress |
-| `NeonPink` | `#FF2D78` | Favorites / danger |
-| `GlassWhite` | `#14FFFFFF` | Glassmorphism overlay |
-
----
-
-## 📋 Permissions
-
-| Permission | Reason |
-|-----------|--------|
-| `READ_MEDIA_AUDIO` | Access music files (Android 13+) |
-| `READ_EXTERNAL_STORAGE` | Access music files (Android 12 and below) |
-| `FOREGROUND_SERVICE` | Background playback |
-| `POST_NOTIFICATIONS` | Media notification (Android 13+) |
-
----
-
-## 📄 License
-
-```
-MIT License — Copyright (c) 2026 Lucid Player
-Permission is granted to use, copy, modify, and distribute freely.
-```
-
----
-
-<div align="center">
-Made with ❤️ and Kotlin • <a href="https://github.com/YOUR_USERNAME/LucidPlayer">GitHub</a>
-</div>
+<div align="center">Made with ♥ · Kotlin · Jetpack Compose · Media3</div>

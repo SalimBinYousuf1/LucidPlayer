@@ -1,18 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Lucid Player</string>
-    <string name="now_playing">Now Playing</string>
-    <string name="library">Library</string>
-    <string name="search">Search</string>
-    <string name="artists">Artists</string>
-    <string name="albums">Albums</string>
-    <string name="songs">Songs</string>
-    <string name="favorites">Favorites</string>
-    <string name="playlists">Playlists</string>
-    <string name="shuffle">Shuffle</string>
-    <string name="repeat">Repeat</string>
-    <string name="play">Play</string>
-    <string name="pause">Pause</string>
-    <string name="next">Next</string>
-    <string name="previous">Previous</string>
+    <string name="channel_name">Lucid Music</string>
+    <string name="channel_desc">Music playback controls</string>
 </resources>

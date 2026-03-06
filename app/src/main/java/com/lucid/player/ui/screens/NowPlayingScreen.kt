@@ -1,14 +1,13 @@
 package com.lucid.player.ui.screens
 
-import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,9 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -27,524 +24,387 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.lucid.player.data.models.PlayerState
 import com.lucid.player.data.models.RepeatMode
-import com.lucid.player.ui.theme.*
+import com.lucid.player.ui.components.*
+import com.lucid.player.ui.theme.LucidColors
 import com.lucid.player.viewmodel.PlayerViewModel
-import kotlin.math.abs
 
 @Composable
 fun NowPlayingScreen(
-    viewModel: PlayerViewModel,
-    onNavigateBack: () -> Unit
+    vm: PlayerViewModel,
+    onBack: () -> Unit
 ) {
-    val playerState by viewModel.playerState.collectAsState()
-    val favorites by viewModel.favorites.collectAsState()
-    val song = playerState.currentSong
+    val state by vm.state.collectAsState()
+    val favIds by vm.favIds.collectAsState()
+    val song = state.currentSong
+    var showQueue by remember { mutableStateOf(false) }
+    var showSleepTimer by remember { mutableStateOf(false) }
+    var showSpeedSheet by remember { mutableStateOf(false) }
 
-    // Animated rotation for vinyl record
-    val infiniteTransition = rememberInfiniteTransition(label = "vinyl")
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(8000, easing = LinearEasing),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Restart
-        ),
-        label = "rotation"
+    // Vinyl spin
+    val infiniteRotation = rememberInfiniteTransition(label = "vinyl")
+    val rotation by infiniteRotation.animateFloat(
+        0f, 360f,
+        infiniteRepeatable(tween(10000, easing = LinearEasing)),
+        label = "rot"
     )
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Void)
-    ) {
-        // Animated gradient background
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            NeonPurple.copy(alpha = 0.3f),
-                            CelestialBlue.copy(alpha = 0.15f),
-                            Void
-                        ),
-                        center = Offset(0.5f, 0.2f),
-                        radius = 800f
-                    )
-                )
-        )
+    Box(Modifier.fillMaxSize().background(LucidColors.Void)) {
+        // Ambient glow blobs
+        AmbienceBackground(isPlaying = state.isPlaying)
 
-        // Floating orbs for atmosphere
-        Box(
-            modifier = Modifier
-                .size(300.dp)
-                .offset((-80).dp, (-40).dp)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            NeonPurple.copy(alpha = 0.25f),
-                            Color.Transparent
-                        )
-                    )
-                )
-                .blur(60.dp)
-        )
-        Box(
-            modifier = Modifier
-                .size(250.dp)
-                .align(Alignment.BottomEnd)
-                .offset(60.dp, 60.dp)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            CelestialBlue.copy(alpha = 0.2f),
-                            Color.Transparent
-                        )
-                    )
-                )
-                .blur(60.dp)
-        )
+        if (showQueue) {
+            QueueSheet(state = state, vm = vm, onDismiss = { showQueue = false })
+            return@Box
+        }
 
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
+            modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
         ) {
-            // Top bar
+            // ── Top bar ───────────────────────────────────────────────────────
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(
-                    onClick = onNavigateBack,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(GlassWhite)
-                ) {
-                    Icon(
-                        Icons.Rounded.KeyboardArrowDown,
-                        contentDescription = "Minimize",
-                        tint = TextPrimary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-
+                GlowIconButton(Icons.Rounded.KeyboardArrowDown, "Back", onBack, size = 44.dp, iconSize = 26.dp)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        "NOW PLAYING",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextSecondary,
-                        letterSpacing = 3.sp
-                    )
+                    Text("NOW PLAYING", style = MaterialTheme.typography.labelSmall,
+                        color = LucidColors.Text50, letterSpacing = 2.5.sp)
+                    if (song != null)
+                        Text(song.album, style = MaterialTheme.typography.labelMedium,
+                            color = LucidColors.Text80, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-
-                IconButton(
-                    onClick = { /* queue */ },
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(GlassWhite)
-                ) {
-                    Icon(
-                        Icons.Rounded.QueueMusic,
-                        contentDescription = "Queue",
-                        tint = TextPrimary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                GlowIconButton(Icons.Rounded.QueueMusic, "Queue", { showQueue = true }, size = 44.dp, iconSize = 22.dp)
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
 
-            // Vinyl / Artwork
+            // ── Vinyl record ─────────────────────────────────────────────────
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 40.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 44.dp),
                 contentAlignment = Alignment.Center
             ) {
-                // Outer vinyl ring
-                Box(
-                    modifier = Modifier
-                        .size(280.dp)
-                        .rotate(if (playerState.isPlaying) rotation else rotation)
-                        .clip(CircleShape)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(
-                                    Color(0xFF2A2A2A),
-                                    Color(0xFF111111),
-                                    Color(0xFF1E1E1E),
-                                    Color(0xFF0A0A0A)
-                                )
-                            )
-                        )
-                        .border(1.dp, GlassBorder, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    // Vinyl grooves (decorative rings)
-                    repeat(5) { i ->
-                        Box(
-                            modifier = Modifier
-                                .size((220 - i * 28).dp)
-                                .clip(CircleShape)
-                                .border(0.5.dp, Color.White.copy(alpha = 0.05f + i * 0.01f), CircleShape)
-                        )
-                    }
-
-                    // Center artwork
-                    Box(
-                        modifier = Modifier
-                            .size(140.dp)
-                            .clip(CircleShape)
-                            .background(Surface2)
-                            .border(2.dp, GlassBorder, CircleShape)
-                    ) {
-                        if (song?.artworkUri != null) {
-                            AsyncImage(
-                                model = song.artworkUri,
-                                contentDescription = "Album art",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        Brush.radialGradient(
-                                            colors = listOf(NeonPurple, CelestialBlue)
-                                        )
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    Icons.Rounded.MusicNote,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(48.dp)
-                                )
-                            }
-                        }
-
-                        // Center pin hole
-                        Box(
-                            modifier = Modifier
-                                .size(12.dp)
-                                .clip(CircleShape)
-                                .background(Void)
-                                .border(1.dp, GlassBorder, CircleShape)
-                                .align(Alignment.Center)
-                        )
-                    }
-                }
-
-                // Playing indicator glow
-                if (playerState.isPlaying) {
-                    Box(
-                        modifier = Modifier
-                            .size(290.dp)
-                            .clip(CircleShape)
-                            .border(
-                                width = 1.5.dp,
-                                brush = Brush.sweepGradient(
-                                    colors = listOf(
-                                        NeonPurple.copy(alpha = 0.8f),
-                                        CelestialBlue.copy(alpha = 0.4f),
-                                        Aurora.copy(alpha = 0.6f),
-                                        NeonPurple.copy(alpha = 0.8f)
-                                    )
-                                ),
-                                shape = CircleShape
-                            )
-                    )
-                }
+                VinylRecord(
+                    artworkUri = song?.artworkUri,
+                    isPlaying = state.isPlaying,
+                    rotation = rotation
+                )
             }
 
-            Spacer(modifier = Modifier.height(36.dp))
+            Spacer(Modifier.height(32.dp))
 
-            // Song info
+            // ── Song info + fav ───────────────────────────────────────────────
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 28.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 28.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(Modifier.weight(1f).padding(end = 12.dp)) {
                     Text(
-                        text = song?.title ?: "No Song Selected",
+                        song?.title ?: "Nothing Playing",
                         style = MaterialTheme.typography.headlineSmall,
-                        color = TextPrimary,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        color = LucidColors.Text100,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(Modifier.height(4.dp))
                     Text(
-                        text = song?.artist ?: "Unknown Artist",
+                        song?.artist ?: "—",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = TextSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        color = LucidColors.Text50,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis
                     )
                 }
-
-                // Favorite button
-                val isFav = song?.id?.let { it in favorites } == true
-                IconButton(
-                    onClick = { song?.id?.let { viewModel.toggleFavorite(it) } },
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(if (isFav) NeonPink.copy(alpha = 0.15f) else GlassWhite)
-                ) {
-                    Icon(
-                        if (isFav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                        contentDescription = "Favorite",
-                        tint = if (isFav) NeonPink else TextSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Progress bar
-            Column(
-                modifier = Modifier.padding(horizontal = 28.dp)
-            ) {
-                // Glowing progress slider
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(Surface3)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(playerState.progress)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    colors = listOf(CelestialBlue, NeonPurple, Aurora)
-                                )
-                            )
-                    )
-
-                    // Glow on thumb
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(playerState.progress)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        NeonPurple.copy(alpha = 0.3f)
-                                    )
-                                )
-                            )
-                    )
-                }
-
-                Slider(
-                    value = playerState.progress,
-                    onValueChange = { viewModel.seekTo(it) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(24.dp)
-                        .offset(y = (-14).dp),
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color.White,
-                        activeTrackColor = Color.Transparent,
-                        inactiveTrackColor = Color.Transparent
-                    )
+                val isFav = song?.id?.let { it in favIds } == true
+                GlowIconButton(
+                    icon = if (isFav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                    contentDescription = "Favorite",
+                    onClick = { song?.id?.let { vm.toggleFav(it) } },
+                    size = 46.dp, iconSize = 22.dp,
+                    active = isFav, activeColor = LucidColors.Ember
                 )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth().offset(y = (-8).dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        formatDuration(playerState.currentPosition),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = TextSecondary
-                    )
-                    Text(
-                        song?.durationFormatted ?: "0:00",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = TextSecondary
-                    )
-                }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(Modifier.height(28.dp))
 
-            // Main Controls
+            // ── Seek bar ─────────────────────────────────────────────────────
+            SeekBar(state = state, onSeek = vm::seekTo)
+
+            Spacer(Modifier.height(20.dp))
+
+            // ── Main controls ─────────────────────────────────────────────────
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 24.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Shuffle
-                IconButton(
-                    onClick = viewModel::toggleShuffle,
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Icon(
-                        Icons.Rounded.Shuffle,
-                        contentDescription = "Shuffle",
-                        tint = if (playerState.isShuffled) NeonPurple else TextSecondary,
-                        modifier = Modifier.size(22.dp)
-                    )
+                GlowIconButton(
+                    icon = Icons.Rounded.Shuffle, "Shuffle", vm::toggleShuffle,
+                    size = 48.dp, iconSize = 22.dp,
+                    active = state.isShuffled, activeColor = LucidColors.Indigo
+                )
+                GlowIconButton(Icons.Rounded.SkipPrevious, "Previous", vm::skipPrev, size = 58.dp, iconSize = 30.dp)
+                PrimaryPlayButton(isPlaying = state.isPlaying, onClick = vm::togglePlayPause, size = 76.dp)
+                GlowIconButton(Icons.Rounded.SkipNext, "Next", vm::skipNext, size = 58.dp, iconSize = 30.dp)
+                val (repIcon, repActive) = when (state.repeatMode) {
+                    RepeatMode.OFF -> Icons.Rounded.Repeat    to false
+                    RepeatMode.ALL -> Icons.Rounded.Repeat    to true
+                    RepeatMode.ONE -> Icons.Rounded.RepeatOne to true
                 }
-
-                // Skip Previous
-                IconButton(
-                    onClick = viewModel::skipPrevious,
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                        .background(GlassWhite)
-                ) {
-                    Icon(
-                        Icons.Rounded.SkipPrevious,
-                        contentDescription = "Previous",
-                        tint = TextPrimary,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-
-                // Play/Pause - Main button
-                Box(
-                    modifier = Modifier
-                        .size(72.dp)
-                        .clip(CircleShape)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(NeonPurple, ElectricViolet)
-                            )
-                        )
-                        .clickable { viewModel.togglePlayPause() }
-                        .shadow(
-                            elevation = 20.dp,
-                            shape = CircleShape,
-                            ambientColor = NeonPurple.copy(alpha = 0.5f),
-                            spotColor = NeonPurple.copy(alpha = 0.8f)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        if (playerState.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                        contentDescription = if (playerState.isPlaying) "Pause" else "Play",
-                        tint = Color.White,
-                        modifier = Modifier.size(36.dp)
-                    )
-                }
-
-                // Skip Next
-                IconButton(
-                    onClick = viewModel::skipNext,
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                        .background(GlassWhite)
-                ) {
-                    Icon(
-                        Icons.Rounded.SkipNext,
-                        contentDescription = "Next",
-                        tint = TextPrimary,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-
-                // Repeat
-                IconButton(
-                    onClick = viewModel::toggleRepeat,
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    val (icon, tint) = when (playerState.repeatMode) {
-                        RepeatMode.OFF -> Icons.Rounded.Repeat to TextSecondary
-                        RepeatMode.ALL -> Icons.Rounded.Repeat to NeonPurple
-                        RepeatMode.ONE -> Icons.Rounded.RepeatOne to Aurora
-                    }
-                    Icon(
-                        icon,
-                        contentDescription = "Repeat",
-                        tint = tint,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
+                GlowIconButton(repIcon, "Repeat", vm::toggleRepeat, size = 48.dp, iconSize = 22.dp,
+                    active = repActive, activeColor = LucidColors.Aurora)
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(Modifier.height(28.dp))
 
-            // Extra actions row
+            // ── Extra action chips ────────────────────────────────────────────
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 28.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                ActionChip(Icons.Rounded.PlaylistAdd, "Add to Playlist")
-                ActionChip(Icons.Rounded.Share, "Share")
-                ActionChip(Icons.Rounded.Equalizer, "Equalizer")
-                ActionChip(Icons.Rounded.MoreHoriz, "More")
+                ActionChip(icon = Icons.Rounded.Timer, label = if (state.sleepTimerMinutes > 0) "${state.sleepTimerMinutes}m" else "Sleep",
+                    active = state.sleepTimerMinutes > 0) { showSleepTimer = true }
+                ActionChip(icon = Icons.Rounded.Speed, label = "${state.playbackSpeed}x",
+                    active = state.playbackSpeed != 1f) { showSpeedSheet = true }
+                ActionChip(icon = Icons.Rounded.PlaylistAdd, label = "Queue") { showQueue = true }
+                ActionChip(icon = Icons.Rounded.Share, label = "Share") { }
             }
+        }
+
+        // ── Sheets ────────────────────────────────────────────────────────────
+        if (showSleepTimer) SleepTimerSheet(currentMinutes = state.sleepTimerMinutes,
+            onSet = { vm.setSleepTimer(it); showSleepTimer = false },
+            onCancel = { vm.cancelSleepTimer(); showSleepTimer = false },
+            onDismiss = { showSleepTimer = false })
+
+        if (showSpeedSheet) SpeedSheet(current = state.playbackSpeed,
+            onSelect = { vm.setPlaybackSpeed(it); showSpeedSheet = false },
+            onDismiss = { showSpeedSheet = false })
+    }
+}
+
+/* ─── Vinyl record component ─────────────────────────────────────────────────── */
+@Composable
+private fun VinylRecord(artworkUri: Any?, isPlaying: Boolean, rotation: Float) {
+    val actualRotation = if (isPlaying) rotation else rotation // freeze if not playing by not using animated value when stopped
+    Box(contentAlignment = Alignment.Center) {
+        // Outer platter shadow/glow
+        if (isPlaying) {
+            Box(
+                modifier = Modifier.size(300.dp).clip(CircleShape)
+                    .background(Brush.radialGradient(colors = listOf(LucidColors.Indigo.copy(0.2f), Color.Transparent)))
+                    .blur(24.dp)
+            )
+        }
+        // Vinyl body
+        Box(
+            modifier = Modifier.size(270.dp).rotate(if (isPlaying) rotation else 0f).clip(CircleShape)
+                .background(Brush.radialGradient(
+                    colors = listOf(Color(0xFF2A2A30), Color(0xFF111115), Color(0xFF1C1C22), Color(0xFF080808))
+                )).border(1.dp, LucidColors.GlassBorder, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            // Groove rings
+            listOf(240, 200, 165, 130).forEach { size ->
+                Box(Modifier.size(size.dp).clip(CircleShape).border(0.5.dp, Color.White.copy(0.04f), CircleShape))
+            }
+            // Center label artwork
+            Box(
+                modifier = Modifier.size(110.dp).clip(CircleShape)
+                    .background(LucidColors.Surface).border(1.5.dp, LucidColors.GlassBorder, CircleShape)
+            ) {
+                if (artworkUri != null) {
+                    AsyncImage(model = artworkUri, contentDescription = null,
+                        modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                } else {
+                    Box(Modifier.fillMaxSize()
+                        .background(Brush.radialGradient(colors = listOf(LucidColors.Indigo, LucidColors.Depth))),
+                        contentAlignment = Alignment.Center) {
+                        Icon(Icons.Rounded.MusicNote, null, tint = Color.White.copy(0.6f), modifier = Modifier.size(40.dp))
+                    }
+                }
+                // Spindle hole
+                Box(Modifier.size(10.dp).clip(CircleShape).background(LucidColors.Void)
+                    .border(1.dp, LucidColors.GlassBorder, CircleShape).align(Alignment.Center))
+            }
+        }
+        // Animated rainbow ring when playing
+        if (isPlaying) {
+            Box(
+                modifier = Modifier.size(278.dp).clip(CircleShape).border(
+                    width = 1.5.dp,
+                    brush = Brush.sweepGradient(listOf(LucidColors.Indigo, LucidColors.Aurora, LucidColors.CosmicLight, LucidColors.Indigo)),
+                    shape = CircleShape
+                )
+            )
         }
     }
 }
 
+/* ─── Ambience background glows ──────────────────────────────────────────────── */
+@Composable
+private fun AmbienceBackground(isPlaying: Boolean) {
+    val alpha by animateFloatAsState(if (isPlaying) 1f else 0.4f, tween(1500), label = "amb")
+    Box(Modifier.fillMaxSize()) {
+        Box(Modifier.size(350.dp).offset((-80).dp, (-60).dp).clip(CircleShape)
+            .alpha(alpha * 0.28f)
+            .background(Brush.radialGradient(colors = listOf(LucidColors.Indigo, Color.Transparent)))
+            .blur(80.dp))
+        Box(Modifier.size(300.dp).align(Alignment.BottomEnd).offset(80.dp, 80.dp).clip(CircleShape)
+            .alpha(alpha * 0.20f)
+            .background(Brush.radialGradient(colors = listOf(LucidColors.Cosmic, Color.Transparent)))
+            .blur(80.dp))
+    }
+}
+
+/* ─── Seek bar ────────────────────────────────────────────────────────────────── */
+@Composable
+private fun SeekBar(state: PlayerState, onSeek: (Float) -> Unit) {
+    Column(Modifier.padding(horizontal = 26.dp)) {
+        Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)).background(LucidColors.Card)) {
+            Box(Modifier.fillMaxWidth(state.progress).fillMaxHeight().clip(RoundedCornerShape(2.dp))
+                .background(Brush.horizontalGradient(colors = listOf(LucidColors.Indigo, LucidColors.Aurora))))
+        }
+        Slider(
+            value = state.progress, onValueChange = onSeek,
+            modifier = Modifier.fillMaxWidth().height(28.dp).offset(y = (-18).dp),
+            colors = SliderDefaults.colors(
+                thumbColor = Color.White, activeTrackColor = Color.Transparent, inactiveTrackColor = Color.Transparent
+            )
+        )
+        Row(Modifier.fillMaxWidth().offset(y = (-14).dp), Arrangement.SpaceBetween) {
+            Text(formatMs(state.currentPosition), style = MaterialTheme.typography.labelSmall, color = LucidColors.Text50)
+            Text(state.currentSong?.durationFormatted ?: "0:00", style = MaterialTheme.typography.labelSmall, color = LucidColors.Text50)
+        }
+    }
+}
+
+/* ─── Action chip ─────────────────────────────────────────────────────────────── */
 @Composable
 private fun ActionChip(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String
+    label: String,
+    active: Boolean = false,
+    onClick: () -> Unit
 ) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable { }
-    ) {
+    Column(Modifier.clickable(onClick = onClick), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(GlassWhite)
-                .border(1.dp, GlassBorder, RoundedCornerShape(12.dp)),
+            Modifier.size(50.dp).clip(RoundedCornerShape(14.dp))
+                .background(if (active) LucidColors.Indigo.copy(0.2f) else LucidColors.Glass10)
+                .border(0.5.dp, if (active) LucidColors.Indigo.copy(0.5f) else LucidColors.GlassBorder, RoundedCornerShape(14.dp)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                icon,
-                contentDescription = label,
-                tint = TextSecondary,
-                modifier = Modifier.size(20.dp)
-            )
+            Icon(icon, label, tint = if (active) LucidColors.IndigoLight else LucidColors.Text50, modifier = Modifier.size(22.dp))
         }
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            label,
-            style = MaterialTheme.typography.labelSmall,
-            color = TextTertiary,
-            maxLines = 1
-        )
+        Spacer(Modifier.height(4.dp))
+        Text(label, style = MaterialTheme.typography.labelSmall, color = LucidColors.Text30, maxLines = 1)
     }
 }
 
-private fun formatDuration(ms: Long): String {
-    val totalSeconds = ms / 1000
-    val minutes = totalSeconds / 60
-    val seconds = totalSeconds % 60
-    return "%d:%02d".format(minutes, seconds)
+/* ─── Queue sheet ─────────────────────────────────────────────────────────────── */
+@Composable
+private fun QueueSheet(state: PlayerState, vm: PlayerViewModel, onDismiss: () -> Unit) {
+    Box(Modifier.fillMaxSize().background(LucidColors.Void)) {
+        Column(Modifier.fillMaxSize().statusBarsPadding()) {
+            Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                GlowIconButton(Icons.Rounded.ArrowBack, "Back", onDismiss)
+                Text("Up Next", style = MaterialTheme.typography.titleLarge, color = LucidColors.Text100, fontWeight = FontWeight.Bold)
+                Text("${state.queue.size} songs", style = MaterialTheme.typography.labelMedium, color = LucidColors.Text50)
+            }
+            GradientDivider()
+            LazyColumn {
+                itemsIndexed(state.queue) { index, song ->
+                    SongRow(
+                        song = song,
+                        isPlaying = index == state.currentIndex,
+                        isFav = false,
+                        onPlay = { vm.playSong(song, state.queue) },
+                        onFav = {}
+                    )
+                }
+            }
+        }
+    }
+}
+
+/* ─── Sleep timer sheet ─────────────────────────────────────────────────────────── */
+@Composable
+private fun SleepTimerSheet(currentMinutes: Int, onSet: (Int) -> Unit, onCancel: () -> Unit, onDismiss: () -> Unit) {
+    val options = listOf(5, 10, 15, 30, 45, 60)
+    Box(
+        modifier = Modifier.fillMaxSize().background(Color.Black.copy(0.7f)).clickable(onClick = onDismiss),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .background(LucidColors.SurfaceHigh).padding(24.dp).clickable {}
+        ) {
+            Text("Sleep Timer", style = MaterialTheme.typography.headlineSmall, color = LucidColors.Text100, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(20.dp))
+            options.chunked(3).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    row.forEach { mins ->
+                        val active = currentMinutes == mins
+                        Box(
+                            modifier = Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(14.dp))
+                                .background(if (active) LucidColors.Indigo else LucidColors.Card)
+                                .border(1.dp, if (active) LucidColors.IndigoLight.copy(0.5f) else LucidColors.GlassBorder, RoundedCornerShape(14.dp))
+                                .clickable { onSet(mins) },
+                            contentAlignment = Alignment.Center
+                        ) { Text("${mins}m", color = if (active) Color.White else LucidColors.Text80, fontWeight = FontWeight.SemiBold) }
+                    }
+                    if (row.size < 3) repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+                Spacer(Modifier.height(10.dp))
+            }
+            if (currentMinutes > 0) {
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = onCancel,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = LucidColors.Ember.copy(0.2f))
+                ) { Text("Cancel Timer (${currentMinutes}m left)", color = LucidColors.Ember) }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+    }
+}
+
+/* ─── Speed sheet ─────────────────────────────────────────────────────────────── */
+@Composable
+private fun SpeedSheet(current: Float, onSelect: (Float) -> Unit, onDismiss: () -> Unit) {
+    val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+    Box(
+        modifier = Modifier.fillMaxSize().background(Color.Black.copy(0.7f)).clickable(onClick = onDismiss),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .background(LucidColors.SurfaceHigh).padding(24.dp).clickable {}
+        ) {
+            Text("Playback Speed", style = MaterialTheme.typography.headlineSmall, color = LucidColors.Text100, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(20.dp))
+            speeds.chunked(3).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    row.forEach { speed ->
+                        val active = current == speed
+                        Box(
+                            modifier = Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(14.dp))
+                                .background(if (active) LucidColors.Indigo else LucidColors.Card)
+                                .border(1.dp, if (active) LucidColors.IndigoLight.copy(0.5f) else LucidColors.GlassBorder, RoundedCornerShape(14.dp))
+                                .clickable { onSelect(speed) },
+                            contentAlignment = Alignment.Center
+                        ) { Text("${speed}x", color = if (active) Color.White else LucidColors.Text80, fontWeight = FontWeight.SemiBold) }
+                    }
+                    if (row.size < 3) repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+                Spacer(Modifier.height(10.dp))
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+    }
+}
+
+private fun formatMs(ms: Long): String {
+    val s = ms / 1000; return "%d:%02d".format(s / 60, s % 60)
 }

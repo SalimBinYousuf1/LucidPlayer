@@ -19,44 +19,24 @@ import javax.inject.Singleton
 class MusicRepository @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    fun getAllSongs(sort: String = "${MediaStore.Audio.Media.TITLE} ASC"): Flow<List<Song>> =
+        flow { emit(querySongs(sortOrder = sort)) }.flowOn(Dispatchers.IO)
 
-    fun getAllSongs(): Flow<List<Song>> = flow {
-        val songs = querySongs()
-        emit(songs)
-    }.flowOn(Dispatchers.IO)
+    fun getAllAlbums(): Flow<List<Album>> =
+        flow { emit(queryAlbums()) }.flowOn(Dispatchers.IO)
 
-    fun getAllAlbums(): Flow<List<Album>> = flow {
-        val albums = queryAlbums()
-        emit(albums)
-    }.flowOn(Dispatchers.IO)
+    fun getAllArtists(): Flow<List<Artist>> =
+        flow { emit(queryArtists()) }.flowOn(Dispatchers.IO)
 
-    fun getAllArtists(): Flow<List<Artist>> = flow {
-        val artists = queryArtists()
-        emit(artists)
-    }.flowOn(Dispatchers.IO)
+    fun getRecentSongs(limit: Int = 20): Flow<List<Song>> =
+        flow { emit(querySongs(sortOrder = "${MediaStore.Audio.Media.DATE_ADDED} DESC").take(limit)) }
+            .flowOn(Dispatchers.IO)
 
-    fun getSongsByAlbum(albumId: Long): Flow<List<Song>> = flow {
-        val songs = querySongs(
-            selection = "${MediaStore.Audio.Media.ALBUM_ID} = ?",
-            selectionArgs = arrayOf(albumId.toString())
-        )
-        emit(songs)
-    }.flowOn(Dispatchers.IO)
-
-    fun getSongsByArtist(artistName: String): Flow<List<Song>> = flow {
-        val songs = querySongs(
-            selection = "${MediaStore.Audio.Media.ARTIST} = ?",
-            selectionArgs = arrayOf(artistName)
-        )
-        emit(songs)
-    }.flowOn(Dispatchers.IO)
-
-    fun searchSongs(query: String): Flow<List<Song>> = flow {
-        val songs = querySongs(
+    fun searchSongs(q: String): Flow<List<Song>> = flow {
+        emit(querySongs(
             selection = "${MediaStore.Audio.Media.TITLE} LIKE ? OR ${MediaStore.Audio.Media.ARTIST} LIKE ? OR ${MediaStore.Audio.Media.ALBUM} LIKE ?",
-            selectionArgs = arrayOf("%$query%", "%$query%", "%$query%")
-        )
-        emit(songs)
+            selectionArgs = arrayOf("%$q%", "%$q%", "%$q%")
+        ))
     }.flowOn(Dispatchers.IO)
 
     private fun querySongs(
@@ -65,7 +45,9 @@ class MusicRepository @Inject constructor(
         sortOrder: String = "${MediaStore.Audio.Media.TITLE} ASC"
     ): List<Song> {
         val songs = mutableListOf<Song>()
-        val projection = arrayOf(
+        val base = "${MediaStore.Audio.Media.IS_MUSIC}!=0 AND ${MediaStore.Audio.Media.DURATION}>30000"
+        val finalSel = if (selection != null) "$base AND $selection" else base
+        val proj = arrayOf(
             MediaStore.Audio.Media._ID,
             MediaStore.Audio.Media.TITLE,
             MediaStore.Audio.Media.ARTIST,
@@ -76,53 +58,36 @@ class MusicRepository @Inject constructor(
             MediaStore.Audio.Media.YEAR,
             MediaStore.Audio.Media.DATE_ADDED,
             MediaStore.Audio.Media.SIZE,
-            MediaStore.Audio.Media.IS_MUSIC
         )
-
-        val baseSelection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DURATION} > 30000"
-        val finalSelection = if (selection != null) "$baseSelection AND $selection" else baseSelection
-
         context.contentResolver.query(
-            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-            projection,
-            finalSelection,
-            selectionArgs,
-            sortOrder
-        )?.use { cursor ->
-            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-            val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-            val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-            val albumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
-            val albumIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
-            val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-            val trackCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
-            val yearCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
-            val dateAddedCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
-            val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
-
-            while (cursor.moveToNext()) {
-                val id = cursor.getLong(idCol)
-                val albumId = cursor.getLong(albumIdCol)
-                val contentUri = ContentUris.withAppendedId(
-                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id
-                )
-                val artworkUri = Uri.parse("content://media/external/audio/albumart/$albumId")
-
-                songs.add(
-                    Song(
-                        id = id,
-                        title = cursor.getString(titleCol) ?: "Unknown",
-                        artist = cursor.getString(artistCol) ?: "Unknown Artist",
-                        album = cursor.getString(albumCol) ?: "Unknown Album",
-                        albumId = albumId,
-                        duration = cursor.getLong(durationCol),
-                        uri = contentUri,
-                        artworkUri = artworkUri,
-                        trackNumber = cursor.getInt(trackCol),
-                        year = cursor.getInt(yearCol),
-                        dateAdded = cursor.getLong(dateAddedCol),
-                        size = cursor.getLong(sizeCol)
-                    )
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, proj, finalSel, selectionArgs, sortOrder
+        )?.use { c ->
+            val iId   = c.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+            val iTitle= c.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+            val iArt  = c.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+            val iAlb  = c.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+            val iAId  = c.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+            val iDur  = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+            val iTrk  = c.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
+            val iYr   = c.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
+            val iDate = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+            val iSize = c.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
+            while (c.moveToNext()) {
+                val id    = c.getLong(iId)
+                val albId = c.getLong(iAId)
+                songs += Song(
+                    id          = id,
+                    title       = c.getString(iTitle)  ?: "Unknown",
+                    artist      = c.getString(iArt)    ?: "Unknown Artist",
+                    album       = c.getString(iAlb)    ?: "Unknown Album",
+                    albumId     = albId,
+                    duration    = c.getLong(iDur),
+                    uri         = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id),
+                    artworkUri  = Uri.parse("content://media/external/audio/albumart/$albId"),
+                    trackNumber = c.getInt(iTrk),
+                    year        = c.getInt(iYr),
+                    dateAdded   = c.getLong(iDate),
+                    size        = c.getLong(iSize),
                 )
             }
         }
@@ -130,75 +95,44 @@ class MusicRepository @Inject constructor(
     }
 
     private fun queryAlbums(): List<Album> {
-        val albums = mutableListOf<Album>()
-        val projection = arrayOf(
-            MediaStore.Audio.Albums._ID,
-            MediaStore.Audio.Albums.ALBUM,
-            MediaStore.Audio.Albums.ARTIST,
-            MediaStore.Audio.Albums.NUMBER_OF_SONGS,
-            MediaStore.Audio.Albums.FIRST_YEAR
-        )
-
+        val list = mutableListOf<Album>()
+        val proj = arrayOf(MediaStore.Audio.Albums._ID, MediaStore.Audio.Albums.ALBUM,
+            MediaStore.Audio.Albums.ARTIST, MediaStore.Audio.Albums.NUMBER_OF_SONGS,
+            MediaStore.Audio.Albums.FIRST_YEAR)
         context.contentResolver.query(
-            MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI,
-            projection,
-            null, null,
+            MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI, proj, null, null,
             "${MediaStore.Audio.Albums.ALBUM} ASC"
-        )?.use { cursor ->
-            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Albums._ID)
-            val albumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Albums.ALBUM)
-            val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Albums.ARTIST)
-            val songCountCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Albums.NUMBER_OF_SONGS)
-            val yearCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Albums.FIRST_YEAR)
-
-            while (cursor.moveToNext()) {
-                val id = cursor.getLong(idCol)
-                albums.add(
-                    Album(
-                        id = id,
-                        name = cursor.getString(albumCol) ?: "Unknown Album",
-                        artist = cursor.getString(artistCol) ?: "Unknown Artist",
-                        songCount = cursor.getInt(songCountCol),
-                        artworkUri = Uri.parse("content://media/external/audio/albumart/$id"),
-                        year = cursor.getInt(yearCol)
-                    )
-                )
+        )?.use { c ->
+            val iId = c.getColumnIndexOrThrow(MediaStore.Audio.Albums._ID)
+            val iAlb= c.getColumnIndexOrThrow(MediaStore.Audio.Albums.ALBUM)
+            val iArt= c.getColumnIndexOrThrow(MediaStore.Audio.Albums.ARTIST)
+            val iCnt= c.getColumnIndexOrThrow(MediaStore.Audio.Albums.NUMBER_OF_SONGS)
+            val iYr = c.getColumnIndexOrThrow(MediaStore.Audio.Albums.FIRST_YEAR)
+            while (c.moveToNext()) {
+                val id = c.getLong(iId)
+                list += Album(id, c.getString(iAlb) ?: "Unknown",
+                    c.getString(iArt) ?: "Unknown", c.getInt(iCnt),
+                    Uri.parse("content://media/external/audio/albumart/$id"), c.getInt(iYr))
             }
         }
-        return albums
+        return list
     }
 
     private fun queryArtists(): List<Artist> {
-        val artists = mutableListOf<Artist>()
-        val projection = arrayOf(
-            MediaStore.Audio.Artists._ID,
-            MediaStore.Audio.Artists.ARTIST,
-            MediaStore.Audio.Artists.NUMBER_OF_ALBUMS,
-            MediaStore.Audio.Artists.NUMBER_OF_TRACKS
-        )
-
+        val list = mutableListOf<Artist>()
+        val proj = arrayOf(MediaStore.Audio.Artists._ID, MediaStore.Audio.Artists.ARTIST,
+            MediaStore.Audio.Artists.NUMBER_OF_ALBUMS, MediaStore.Audio.Artists.NUMBER_OF_TRACKS)
         context.contentResolver.query(
-            MediaStore.Audio.Artists.EXTERNAL_CONTENT_URI,
-            projection,
-            null, null,
+            MediaStore.Audio.Artists.EXTERNAL_CONTENT_URI, proj, null, null,
             "${MediaStore.Audio.Artists.ARTIST} ASC"
-        )?.use { cursor ->
-            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Artists._ID)
-            val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Artists.ARTIST)
-            val albumCountCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Artists.NUMBER_OF_ALBUMS)
-            val songCountCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Artists.NUMBER_OF_TRACKS)
-
-            while (cursor.moveToNext()) {
-                artists.add(
-                    Artist(
-                        id = cursor.getLong(idCol),
-                        name = cursor.getString(artistCol) ?: "Unknown Artist",
-                        albumCount = cursor.getInt(albumCountCol),
-                        songCount = cursor.getInt(songCountCol)
-                    )
-                )
-            }
+        )?.use { c ->
+            val iId = c.getColumnIndexOrThrow(MediaStore.Audio.Artists._ID)
+            val iNm = c.getColumnIndexOrThrow(MediaStore.Audio.Artists.ARTIST)
+            val iAl = c.getColumnIndexOrThrow(MediaStore.Audio.Artists.NUMBER_OF_ALBUMS)
+            val iTr = c.getColumnIndexOrThrow(MediaStore.Audio.Artists.NUMBER_OF_TRACKS)
+            while (c.moveToNext())
+                list += Artist(c.getLong(iId), c.getString(iNm) ?: "Unknown", c.getInt(iAl), c.getInt(iTr))
         }
-        return artists
+        return list
     }
 }

@@ -5,237 +5,188 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
-import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
-import com.lucid.player.data.models.Album
-import com.lucid.player.data.models.Artist
-import com.lucid.player.data.models.PlayerState
-import com.lucid.player.data.models.RepeatMode
-import com.lucid.player.data.models.Song
+import com.lucid.player.data.models.*
 import com.lucid.player.data.repository.MusicRepository
 import com.lucid.player.service.MusicService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
 import javax.inject.Inject
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val repository: MusicRepository
+    private val repo: MusicRepository,
 ) : ViewModel() {
 
-    private val _playerState = MutableStateFlow(PlayerState())
-    val playerState: StateFlow<PlayerState> = _playerState.asStateFlow()
+    /* ── Exposed state ─────────────────────────────────────────────────────── */
+    private val _state   = MutableStateFlow(PlayerState())
+    val state: StateFlow<PlayerState> = _state.asStateFlow()
 
-    private val _songs = MutableStateFlow<List<Song>>(emptyList())
+    private val _songs   = MutableStateFlow<List<Song>>(emptyList())
     val songs: StateFlow<List<Song>> = _songs.asStateFlow()
 
-    private val _albums = MutableStateFlow<List<Album>>(emptyList())
+    private val _albums  = MutableStateFlow<List<Album>>(emptyList())
     val albums: StateFlow<List<Album>> = _albums.asStateFlow()
 
     private val _artists = MutableStateFlow<List<Artist>>(emptyList())
     val artists: StateFlow<List<Artist>> = _artists.asStateFlow()
 
-    private val _searchQuery = MutableStateFlow("")
-    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+    private val _query   = MutableStateFlow("")
+    val query: StateFlow<String> = _query.asStateFlow()
 
-    private val _searchResults = MutableStateFlow<List<Song>>(emptyList())
-    val searchResults: StateFlow<List<Song>> = _searchResults.asStateFlow()
+    private val _results = MutableStateFlow<List<Song>>(emptyList())
+    val results: StateFlow<List<Song>> = _results.asStateFlow()
 
-    private val _favorites = MutableStateFlow<Set<Long>>(emptySet())
-    val favorites: StateFlow<Set<Long>> = _favorites.asStateFlow()
+    private val _favIds  = MutableStateFlow<Set<Long>>(emptySet())
+    val favIds: StateFlow<Set<Long>> = _favIds.asStateFlow()
 
-    private var controllerFuture: ListenableFuture<MediaController>? = null
+    val favSongs: StateFlow<List<Song>> = combine(_songs, _favIds) { s, f ->
+        s.filter { it.id in f }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val recentSongs: StateFlow<List<Song>> = _songs.map { it.sortedByDescending { s -> s.dateAdded }.take(20) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /* ── Controller ────────────────────────────────────────────────────────── */
     private var controller: MediaController? = null
+    private var sleepJob: Job? = null
 
-    init {
-        loadLibrary()
-        connectPlayer()
-        startProgressTracking()
-    }
+    init { loadLibrary(); connectPlayer(); trackProgress() }
 
     private fun connectPlayer() {
-        val sessionToken = SessionToken(
-            context,
-            ComponentName(context, MusicService::class.java)
-        )
-        controllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
-        controllerFuture?.addListener({
-            controller = controllerFuture?.get()
-            controller?.addListener(playerListener)
+        val token = SessionToken(context, ComponentName(context, MusicService::class.java))
+        val future = MediaController.Builder(context, token).buildAsync()
+        future.addListener({
+            controller = future.get().also { it.addListener(playerListener) }
         }, MoreExecutors.directExecutor())
     }
 
     private val playerListener = object : Player.Listener {
-        override fun onIsPlayingChanged(isPlaying: Boolean) {
-            _playerState.update { it.copy(isPlaying = isPlaying) }
-        }
-
-        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            val index = controller?.currentMediaItemIndex ?: -1
-            if (index >= 0 && index < _playerState.value.queue.size) {
-                _playerState.update {
-                    it.copy(
-                        currentSong = it.queue[index],
-                        currentIndex = index
-                    )
-                }
+        override fun onIsPlayingChanged(p: Boolean) = _state.update { it.copy(isPlaying = p) }
+        override fun onMediaItemTransition(item: MediaItem?, reason: Int) {
+            val idx = controller?.currentMediaItemIndex ?: return
+            _state.update { s ->
+                s.copy(currentSong = s.queue.getOrNull(idx), currentIndex = idx)
             }
         }
-
-        override fun onRepeatModeChanged(repeatMode: Int) {
-            val mode = when (repeatMode) {
+        override fun onRepeatModeChanged(m: Int) = _state.update {
+            it.copy(repeatMode = when (m) {
                 Player.REPEAT_MODE_ONE -> RepeatMode.ONE
                 Player.REPEAT_MODE_ALL -> RepeatMode.ALL
-                else -> RepeatMode.OFF
-            }
-            _playerState.update { it.copy(repeatMode = mode) }
+                else                   -> RepeatMode.OFF
+            })
         }
-
-        override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
-            _playerState.update { it.copy(isShuffled = shuffleModeEnabled) }
-        }
+        override fun onShuffleModeEnabledChanged(s: Boolean) = _state.update { it.copy(isShuffled = s) }
     }
 
-    private fun startProgressTracking() {
-        viewModelScope.launch {
-            while (true) {
-                val ctrl = controller
-                if (ctrl != null && ctrl.isPlaying) {
-                    val position = ctrl.currentPosition
-                    val duration = ctrl.duration.takeIf { it > 0 } ?: 1L
-                    val progress = (position.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
-                    _playerState.update {
-                        it.copy(progress = progress, currentPosition = position)
-                    }
-                }
-                delay(500)
+    private fun trackProgress() = viewModelScope.launch {
+        while (true) {
+            val ctrl = controller
+            if (ctrl != null && ctrl.isPlaying) {
+                val pos = ctrl.currentPosition
+                val dur = ctrl.duration.takeIf { it > 0 } ?: 1L
+                _state.update { it.copy(progress = (pos.toFloat() / dur).coerceIn(0f, 1f),
+                    currentPosition = pos, duration = dur) }
             }
+            delay(300)
         }
     }
 
     private fun loadLibrary() {
-        viewModelScope.launch {
-            repository.getAllSongs().collect { songList ->
-                _songs.value = songList
-            }
-        }
-        viewModelScope.launch {
-            repository.getAllAlbums().collect { albumList ->
-                _albums.value = albumList
-            }
-        }
-        viewModelScope.launch {
-            repository.getAllArtists().collect { artistList ->
-                _artists.value = artistList
-            }
-        }
+        viewModelScope.launch { repo.getAllSongs().collect { _songs.value = it } }
+        viewModelScope.launch { repo.getAllAlbums().collect { _albums.value = it } }
+        viewModelScope.launch { repo.getAllArtists().collect { _artists.value = it } }
     }
 
+    /* ── Playback controls ─────────────────────────────────────────────────── */
     fun playSong(song: Song, queue: List<Song> = _songs.value) {
         val ctrl = controller ?: return
-        val songIndex = queue.indexOf(song)
-        val mediaItems = queue.map { s ->
-            MediaItem.Builder()
-                .setMediaId(s.id.toString())
-                .setUri(s.uri)
-                .build()
-        }
-
-        ctrl.setMediaItems(mediaItems, songIndex, 0L)
-        ctrl.prepare()
-        ctrl.play()
-
-        _playerState.update {
-            it.copy(
-                currentSong = song,
-                queue = queue,
-                currentIndex = songIndex,
-                isPlaying = true
-            )
-        }
+        val idx = queue.indexOf(song).coerceAtLeast(0)
+        ctrl.setMediaItems(queue.map { MediaItem.Builder().setMediaId(it.id.toString()).setUri(it.uri).build() }, idx, 0L)
+        ctrl.prepare(); ctrl.play()
+        _state.update { it.copy(currentSong = song, queue = queue, currentIndex = idx, isPlaying = true) }
     }
 
-    fun togglePlayPause() {
-        val ctrl = controller ?: return
-        if (ctrl.isPlaying) ctrl.pause() else ctrl.play()
-    }
-
-    fun skipNext() {
-        controller?.seekToNextMediaItem()
-    }
-
-    fun skipPrevious() {
-        val ctrl = controller ?: return
-        if (ctrl.currentPosition > 3000) {
-            ctrl.seekTo(0)
-        } else {
-            ctrl.seekToPreviousMediaItem()
-        }
-    }
-
-    fun seekTo(fraction: Float) {
-        val ctrl = controller ?: return
-        val duration = ctrl.duration.takeIf { it > 0 } ?: return
-        ctrl.seekTo((duration * fraction).toLong())
-    }
+    fun playAll()          { if (_songs.value.isNotEmpty()) playSong(_songs.value.first(), _songs.value) }
+    fun shuffleAll()       { val s = _songs.value.shuffled(); if (s.isNotEmpty()) { toggleShuffle(true); playSong(s.first(), s) } }
+    fun togglePlayPause()  { controller?.let { if (it.isPlaying) it.pause() else it.play() } }
+    fun skipNext()         { controller?.seekToNextMediaItem() }
+    fun skipPrev()         { controller?.let { if (it.currentPosition > 3000) it.seekTo(0) else it.seekToPreviousMediaItem() } }
+    fun seekTo(f: Float)   { controller?.let { it.seekTo(((it.duration.takeIf { d -> d > 0 } ?: 1L) * f).toLong()) } }
 
     fun toggleRepeat() {
         val ctrl = controller ?: return
-        val newMode = when (_playerState.value.repeatMode) {
-            RepeatMode.OFF -> {
-                ctrl.repeatMode = Player.REPEAT_MODE_ALL
-                RepeatMode.ALL
-            }
-            RepeatMode.ALL -> {
-                ctrl.repeatMode = Player.REPEAT_MODE_ONE
-                RepeatMode.ONE
-            }
-            RepeatMode.ONE -> {
-                ctrl.repeatMode = Player.REPEAT_MODE_OFF
-                RepeatMode.OFF
-            }
+        val next = when (_state.value.repeatMode) {
+            RepeatMode.OFF -> RepeatMode.ALL.also { ctrl.repeatMode = Player.REPEAT_MODE_ALL }
+            RepeatMode.ALL -> RepeatMode.ONE.also { ctrl.repeatMode = Player.REPEAT_MODE_ONE }
+            RepeatMode.ONE -> RepeatMode.OFF.also { ctrl.repeatMode = Player.REPEAT_MODE_OFF }
         }
-        _playerState.update { it.copy(repeatMode = newMode) }
+        _state.update { it.copy(repeatMode = next) }
     }
 
-    fun toggleShuffle() {
-        val ctrl = controller ?: return
-        val newShuffle = !_playerState.value.isShuffled
-        ctrl.shuffleModeEnabled = newShuffle
-        _playerState.update { it.copy(isShuffled = newShuffle) }
+    fun toggleShuffle(force: Boolean? = null) {
+        val new = force ?: !_state.value.isShuffled
+        controller?.shuffleModeEnabled = new
+        _state.update { it.copy(isShuffled = new) }
     }
 
-    fun toggleFavorite(songId: Long) {
-        _favorites.update { current ->
-            if (songId in current) current - songId else current + songId
-        }
+    fun setPlaybackSpeed(speed: Float) {
+        controller?.playbackParameters = PlaybackParameters(speed)
+        _state.update { it.copy(playbackSpeed = speed) }
     }
 
-    fun search(query: String) {
-        _searchQuery.value = query
+    fun setVolume(v: Float) {
+        controller?.volume = v
+        _state.update { it.copy(volume = v) }
+    }
+
+    /* ── Favorites ─────────────────────────────────────────────────────────── */
+    fun toggleFav(id: Long) = _favIds.update { if (id in it) it - id else it + id }
+    fun isFav(id: Long) = id in _favIds.value
+
+    /* ── Search ────────────────────────────────────────────────────────────── */
+    fun search(q: String) {
+        _query.value = q
         viewModelScope.launch {
-            if (query.isBlank()) {
-                _searchResults.value = emptyList()
-            } else {
-                repository.searchSongs(query).collect {
-                    _searchResults.value = it
-                }
+            if (q.isBlank()) _results.value = emptyList()
+            else repo.searchSongs(q).collect { _results.value = it }
+        }
+    }
+
+    /* ── Sleep timer ───────────────────────────────────────────────────────── */
+    fun setSleepTimer(minutes: Int) {
+        sleepJob?.cancel()
+        _state.update { it.copy(sleepTimerMinutes = minutes) }
+        if (minutes > 0) {
+            sleepJob = viewModelScope.launch {
+                delay(minutes * 60_000L)
+                controller?.pause()
+                _state.update { it.copy(sleepTimerMinutes = 0) }
             }
         }
     }
 
-    override fun onCleared() {
-        MediaController.releaseFuture(controllerFuture ?: return)
-        super.onCleared()
+    fun cancelSleepTimer() { sleepJob?.cancel(); _state.update { it.copy(sleepTimerMinutes = 0) } }
+
+    /* ── Queue management ──────────────────────────────────────────────────── */
+    fun addToQueue(song: Song) {
+        val newQ = _state.value.queue + song
+        _state.update { it.copy(queue = newQ) }
+        controller?.addMediaItem(MediaItem.Builder().setMediaId(song.id.toString()).setUri(song.uri).build())
     }
+
+    fun removeFromQueue(index: Int) {
+        val newQ = _state.value.queue.toMutableList().also { it.removeAt(index) }
+        _state.update { it.copy(queue = newQ) }
+        controller?.removeMediaItem(index)
+    }
+
+    override fun onCleared() { controller?.release(); super.onCleared() }
 }

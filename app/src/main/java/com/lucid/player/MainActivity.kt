@@ -18,34 +18,33 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    private val permissionLauncher = registerForActivityResult(
+    private val permsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { /* handle permission results */ }
+    ) { /* permissions granted/denied */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        requestPermissions()
-
+        requestAudioPermissions()
         setContent {
             LucidPlayerTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
+                Surface(Modifier.fillMaxSize()) {
                     LucidPlayerApp()
                 }
             }
         }
     }
 
-    private fun requestPermissions() {
-        val permissions = mutableListOf<String>()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissions.add(Manifest.permission.READ_MEDIA_AUDIO)
-            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
-        } else {
-            permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+    private fun requestAudioPermissions() {
+        val perms = buildList {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(Manifest.permission.READ_MEDIA_AUDIO)
+                add(Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                add(Manifest.permission.READ_EXTERNAL_STORAGE)
+            }
         }
-        permissionLauncher.launch(permissions.toTypedArray())
+        permsLauncher.launch(perms.toTypedArray())
     }
 }

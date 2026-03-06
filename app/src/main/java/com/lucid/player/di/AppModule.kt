@@ -1,4 +1,4 @@
-package com.lucid.player
+package com.lucid.player.di
 
 import android.content.Context
 import androidx.media3.common.AudioAttributes
@@ -14,18 +14,15 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
-
-    @Provides
-    @Singleton
-    fun provideExoPlayer(@ApplicationContext context: Context): ExoPlayer {
-        val audioAttributes = AudioAttributes.Builder()
-            .setUsage(C.USAGE_MEDIA)
-            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-            .build()
-
-        return ExoPlayer.Builder(context)
-            .setAudioAttributes(audioAttributes, true)
+    @Provides @Singleton
+    fun provideExoPlayer(@ApplicationContext ctx: Context): ExoPlayer =
+        ExoPlayer.Builder(ctx)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .build(), true
+            )
             .setHandleAudioBecomingNoisy(true)
             .build()
-    }
 }

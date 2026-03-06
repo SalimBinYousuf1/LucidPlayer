@@ -1,11 +1,8 @@
 package com.lucid.player.ui.screens
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -24,363 +21,216 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.lucid.player.data.models.Song
-import com.lucid.player.ui.theme.*
+import com.lucid.player.ui.components.*
+import com.lucid.player.ui.theme.LucidColors
 import com.lucid.player.viewmodel.PlayerViewModel
 import java.util.Calendar
 
 @Composable
 fun HomeScreen(
-    viewModel: PlayerViewModel,
+    vm: PlayerViewModel,
     onSongClick: (Song) -> Unit,
-    onNavigateToNowPlaying: () -> Unit
+    onNowPlaying: () -> Unit
 ) {
-    val songs by viewModel.songs.collectAsState()
-    val albums by viewModel.albums.collectAsState()
-    val playerState by viewModel.playerState.collectAsState()
-    val favorites by viewModel.favorites.collectAsState()
+    val state      by vm.state.collectAsState()
+    val songs      by vm.songs.collectAsState()
+    val favSongs   by vm.favSongs.collectAsState()
+    val recentSongs by vm.recentSongs.collectAsState()
+    val favIds     by vm.favIds.collectAsState()
 
-    val greeting = remember {
-        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        when {
-            hour < 12 -> "Good Morning"
-            hour < 17 -> "Good Afternoon"
-            else -> "Good Evening"
-        }
-    }
-
-    val recentSongs = songs.sortedByDescending { it.dateAdded }.take(20)
-    val favoriteSongs = songs.filter { it.id in favorites }
+    val hour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
+    val greeting = when { hour < 12 -> "Good Morning" ; hour < 17 -> "Good Afternoon" ; else -> "Good Evening" }
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Void),
-        contentPadding = PaddingValues(bottom = 16.dp)
+        modifier = Modifier.fillMaxSize().background(LucidColors.Void),
+        contentPadding = PaddingValues(bottom = 20.dp)
     ) {
-        // Header
+        // ── Hero header ─────────────────────────────────────────────────────
         item {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                NeonPurple.copy(alpha = 0.2f),
-                                Void
-                            )
-                        )
-                    )
+                modifier = Modifier.fillMaxWidth()
+                    .background(Brush.verticalGradient(
+                        colors = listOf(LucidColors.Indigo.copy(0.22f), LucidColors.Void)
+                    ))
                     .statusBarsPadding()
-                    .padding(horizontal = 20.dp, vertical = 24.dp)
+                    .padding(horizontal = 22.dp, vertical = 22.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
                     Column {
-                        Text(
-                            greeting,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TextSecondary
-                        )
-                        Text(
-                            "Lucid Player",
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = TextPrimary,
-                            fontWeight = FontWeight.ExtraBold
-                        )
+                        Text(greeting, style = MaterialTheme.typography.labelLarge, color = LucidColors.Text50)
+                        Spacer(Modifier.height(2.dp))
+                        Text("Lucid", style = MaterialTheme.typography.displayMedium,
+                            color = LucidColors.Text100, fontWeight = FontWeight.Black, letterSpacing = (-1).sp)
                     }
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(
-                                Brush.radialGradient(
-                                    colors = listOf(NeonPurple, CelestialBlue)
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Rounded.Person,
-                            contentDescription = "Profile",
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp)
-                        )
+                    // Stats badge
+                    GlassCard(modifier = Modifier.padding(4.dp)) {
+                        Column(
+                            Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text("${songs.size}", style = MaterialTheme.typography.titleLarge,
+                                color = LucidColors.IndigoLight, fontWeight = FontWeight.Black)
+                            Text("Tracks", style = MaterialTheme.typography.labelSmall, color = LucidColors.Text50)
+                        }
                     }
+                }
+                Spacer(Modifier.height(16.dp))
+                // Quick actions row
+                Row(Modifier.padding(top = 70.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    QuickActionButton(Icons.Rounded.PlayArrow, "Play All",
+                        Modifier.weight(1f)) { vm.playAll(); onNowPlaying() }
+                    QuickActionButton(Icons.Rounded.Shuffle, "Shuffle",
+                        Modifier.weight(1f), filled = false) { vm.shuffleAll(); onNowPlaying() }
                 }
             }
         }
 
-        // Quick Play Banner (if something was playing)
-        if (playerState.currentSong != null) {
+        // ── Currently playing banner ─────────────────────────────────────────
+        if (state.currentSong != null) {
             item {
-                NowPlayingBanner(
-                    playerState = playerState,
-                    onTogglePlay = viewModel::togglePlayPause,
-                    onClick = onNavigateToNowPlaying
-                )
-                Spacer(modifier = Modifier.height(8.dp))
+                NowPlayingBanner(state = state, onTogglePlay = vm::togglePlayPause, onClick = onNowPlaying)
+                Spacer(Modifier.height(4.dp))
             }
         }
 
-        // Recently Added
+        // ── Recently added ────────────────────────────────────────────────────
         if (recentSongs.isNotEmpty()) {
             item {
-                SectionHeader(title = "Recently Added", subtitle = "${recentSongs.size} songs")
+                SectionHeader("Recently Added", "${recentSongs.size} tracks", "See All")
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    items(recentSongs.take(10)) { song ->
-                        SongCard(song = song, onClick = { onSongClick(song) })
+                    items(recentSongs.take(12)) { song ->
+                        SongCard(song = song, isPlaying = state.currentSong?.id == song.id && state.isPlaying,
+                            onClick = { onSongClick(song) })
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(Modifier.height(8.dp))
             }
         }
 
-        // Favorites
-        if (favoriteSongs.isNotEmpty()) {
+        // ── Favorites ─────────────────────────────────────────────────────────
+        if (favSongs.isNotEmpty()) {
             item {
-                SectionHeader(title = "❤️ Favorites", subtitle = "${favoriteSongs.size} songs")
+                SectionHeader("Favourites", "${favSongs.size} saved")
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    items(favoriteSongs.take(10)) { song ->
-                        SongCard(song = song, onClick = { onSongClick(song) })
+                    items(favSongs.take(10)) { song ->
+                        SongCard(song = song, isPlaying = state.currentSong?.id == song.id && state.isPlaying,
+                            onClick = { onSongClick(song) })
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(Modifier.height(8.dp))
             }
         }
 
-        // All Songs header
-        item {
-            SectionHeader(title = "All Songs", subtitle = "${songs.size} tracks")
-        }
+        // ── All songs ─────────────────────────────────────────────────────────
+        item { SectionHeader("All Songs", "${songs.size} tracks") }
 
-        // Songs list
         items(songs) { song ->
-            SongListItem(
+            SongRow(
                 song = song,
-                isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
-                isFavorite = song.id in favorites,
-                onSongClick = { onSongClick(song) },
-                onFavoriteClick = { viewModel.toggleFavorite(song.id) }
+                isPlaying = state.currentSong?.id == song.id && state.isPlaying,
+                isFav = song.id in favIds,
+                onPlay = { onSongClick(song) },
+                onFav = { vm.toggleFav(song.id) }
             )
+            GradientDivider(Modifier.padding(start = 84.dp))
+        }
+    }
+}
+
+@Composable
+fun QuickActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    modifier: Modifier = Modifier,
+    filled: Boolean = true,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier.height(46.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (filled) LucidColors.Indigo else LucidColors.Glass10)
+            .border(if (filled) 0.dp else 0.5.dp, LucidColors.GlassBorder, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(icon, null, tint = if (filled) Color.White else LucidColors.Text80, modifier = Modifier.size(18.dp))
+            Text(label, style = MaterialTheme.typography.labelLarge,
+                color = if (filled) Color.White else LucidColors.Text80, fontWeight = FontWeight.SemiBold)
         }
     }
 }
 
 @Composable
 fun NowPlayingBanner(
-    playerState: com.lucid.player.data.models.PlayerState,
+    state: com.lucid.player.data.models.PlayerState,
     onTogglePlay: () -> Unit,
     onClick: () -> Unit
 ) {
-    val song = playerState.currentSong ?: return
+    val song = state.currentSong ?: return
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                Brush.horizontalGradient(
-                    colors = listOf(NeonPurple.copy(alpha = 0.3f), CelestialBlue.copy(alpha = 0.2f))
-                )
-            )
-            .background(GlassWhite)
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(Brush.horizontalGradient(colors = listOf(
+                LucidColors.Indigo.copy(0.25f), LucidColors.Cosmic.copy(0.15f)
+            )))
+            .border(0.5.dp, LucidColors.GlassBorder, RoundedCornerShape(18.dp))
             .clickable(onClick = onClick)
-            .padding(16.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            // Artwork
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Surface2)
-            ) {
-                if (song.artworkUri != null) {
-                    AsyncImage(
-                        model = song.artworkUri,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier.fillMaxSize().background(
-                            Brush.radialGradient(colors = listOf(NeonPurple, CelestialBlue))
-                        ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Rounded.MusicNote, null, tint = Color.White, modifier = Modifier.size(24.dp))
-                    }
-                }
+        // Progress bar at top
+        Box(Modifier.fillMaxWidth(state.progress).height(2.dp).align(Alignment.TopStart)
+            .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
+            .background(Brush.horizontalGradient(colors = listOf(LucidColors.Indigo, LucidColors.Aurora))))
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ArtworkImage(uri = song.artworkUri, modifier = Modifier.size(52.dp), cornerRadius = 12.dp)
+            Column(Modifier.weight(1f)) {
+                Text(song.title, style = MaterialTheme.typography.labelLarge, color = LucidColors.Text100,
+                    fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(song.artist, style = MaterialTheme.typography.labelSmall, color = LucidColors.Text50,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(song.title, style = MaterialTheme.typography.titleSmall, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(song.artist, style = MaterialTheme.typography.bodySmall, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(modifier = Modifier.height(6.dp))
-                LinearProgressIndicator(
-                    progress = { playerState.progress },
-                    modifier = Modifier.fillMaxWidth().height(2.dp).clip(RoundedCornerShape(1.dp)),
-                    color = NeonPurple,
-                    trackColor = Surface3
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            IconButton(
-                onClick = onTogglePlay,
-                modifier = Modifier.size(40.dp).clip(CircleShape).background(NeonPurple.copy(alpha = 0.3f))
-            ) {
-                Icon(
-                    if (playerState.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                    contentDescription = null, tint = NeonPurple
-                )
-            }
+            GlowIconButton(
+                icon = if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                contentDescription = "Play/Pause", onClick = onTogglePlay,
+                size = 42.dp, iconSize = 22.dp, active = true, activeColor = LucidColors.Indigo
+            )
         }
     }
 }
 
 @Composable
-fun SectionHeader(title: String, subtitle: String? = null) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column {
-            Text(title, style = MaterialTheme.typography.titleLarge, color = TextPrimary, fontWeight = FontWeight.Bold)
-            if (subtitle != null) {
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-            }
-        }
-        Text("See all", style = MaterialTheme.typography.labelMedium, color = NeonPurple)
-    }
-}
-
-@Composable
-fun SongCard(song: Song, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .width(130.dp)
-            .clickable(onClick = onClick),
-        horizontalAlignment = Alignment.Start
-    ) {
-        Box(
-            modifier = Modifier
-                .size(130.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(Surface2)
-        ) {
-            if (song.artworkUri != null) {
-                AsyncImage(
-                    model = song.artworkUri,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Brush.radialGradient(colors = listOf(NeonPurple.copy(0.5f), CelestialBlue.copy(0.3f)))),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Rounded.MusicNote, null, tint = NeonPurple, modifier = Modifier.size(40.dp))
+fun SongCard(song: Song, isPlaying: Boolean, onClick: () -> Unit) {
+    Column(Modifier.width(140.dp).clickable(onClick = onClick)) {
+        Box(Modifier.size(140.dp)) {
+            ArtworkImage(uri = song.artworkUri, modifier = Modifier.fillMaxSize(), cornerRadius = 16.dp)
+            if (isPlaying) {
+                Box(Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)).background(LucidColors.Indigo.copy(0.5f)),
+                    contentAlignment = Alignment.Center) {
+                    PlayingBarsIndicator(Modifier.size(28.dp))
                 }
             }
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(song.title, style = MaterialTheme.typography.labelLarge, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(song.artist, style = MaterialTheme.typography.labelSmall, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-}
-
-@Composable
-fun SongListItem(
-    song: Song,
-    isPlaying: Boolean,
-    isFavorite: Boolean,
-    onSongClick: () -> Unit,
-    onFavoriteClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onSongClick)
-            .background(if (isPlaying) NeonPurple.copy(alpha = 0.08f) else Color.Transparent)
-            .padding(horizontal = 20.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Artwork
-        Box(
-            modifier = Modifier
-                .size(50.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Surface2)
-        ) {
-            if (song.artworkUri != null) {
-                AsyncImage(
-                    model = song.artworkUri,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Box(
-                    modifier = Modifier.fillMaxSize().background(
-                        Brush.radialGradient(colors = listOf(NeonPurple.copy(0.4f), CelestialBlue.copy(0.2f)))
-                    ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Rounded.MusicNote, null, tint = NeonPurple, modifier = Modifier.size(22.dp))
-                }
-            }
+            // Playing badge
             if (isPlaying) {
                 Box(
-                    modifier = Modifier.fillMaxSize().background(NeonPurple.copy(alpha = 0.5f)),
-                    contentAlignment = Alignment.Center
+                    Modifier.align(Alignment.TopEnd).padding(8.dp)
+                        .clip(CircleShape).background(LucidColors.Indigo).padding(5.dp)
                 ) {
-                    Icon(Icons.Rounded.VolumeUp, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Rounded.VolumeUp, null, tint = Color.White, modifier = Modifier.size(12.dp))
                 }
             }
         }
-
-        Spacer(modifier = Modifier.width(14.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                song.title,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (isPlaying) NeonPurple else TextPrimary,
-                fontWeight = if (isPlaying) FontWeight.SemiBold else FontWeight.Normal,
-                maxLines = 1, overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                "${song.artist} • ${song.durationFormatted}",
-                style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary,
-                maxLines = 1, overflow = TextOverflow.Ellipsis
-            )
-        }
-
-        IconButton(onClick = onFavoriteClick, modifier = Modifier.size(36.dp)) {
-            Icon(
-                if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                contentDescription = "Favorite",
-                tint = if (isFavorite) NeonPink else TextTertiary,
-                modifier = Modifier.size(18.dp)
-            )
-        }
+        Spacer(Modifier.height(8.dp))
+        Text(song.title, style = MaterialTheme.typography.labelLarge,
+            color = if (isPlaying) LucidColors.IndigoLight else LucidColors.Text100,
+            fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(song.artist, style = MaterialTheme.typography.labelSmall, color = LucidColors.Text50,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
