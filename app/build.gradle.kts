@@ -31,15 +31,20 @@ android {
 
     signingConfigs {
         create("release") {
-            // CI injects these via -P flags; local builds use keystore.properties
-            storeFile   = file(findProperty("android.injected.signing.store.file") as? String
-                            ?: keystoreProps["storeFile"] as? String ?: "debug.keystore")
-            storePassword = (findProperty("android.injected.signing.store.password") as? String)
-                            ?: keystoreProps["storePassword"] as? String ?: "android"
-            keyAlias    = (findProperty("android.injected.signing.key.alias") as? String)
-                            ?: keystoreProps["keyAlias"] as? String ?: "androiddebugkey"
-            keyPassword = (findProperty("android.injected.signing.key.password") as? String)
-                            ?: keystoreProps["keyPassword"] as? String ?: "android"
+            // Values are injected via -P flags in CI (see .github/workflows/build.yml)
+            // For local builds, create keystore.properties at project root
+            val storeFilePath = findProperty("android.injected.signing.store.file") as? String
+                ?: keystoreProps["storeFile"] as? String
+            if (storeFilePath != null) {
+                storeFile     = file(storeFilePath)
+                storePassword = (findProperty("android.injected.signing.store.password") as? String)
+                                ?: keystoreProps["storePassword"] as? String ?: ""
+                keyAlias      = (findProperty("android.injected.signing.key.alias") as? String)
+                                ?: keystoreProps["keyAlias"] as? String ?: ""
+                keyPassword   = (findProperty("android.injected.signing.key.password") as? String)
+                                ?: keystoreProps["keyPassword"] as? String ?: ""
+            }
+            // If no keystore is provided, Gradle will use the debug signing automatically
         }
     }
 
